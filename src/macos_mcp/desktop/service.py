@@ -279,6 +279,102 @@ class Desktop:
             )
         ax.HotKey(*keys)
 
+    def sequence(
+        self,
+        expected_bundle_id: str,
+        expected_window_title: str,
+        steps: list[dict],
+    ) -> str:
+        """Run a small, pre-validated group of safe UI actions in one call."""
+        if not expected_bundle_id or not expected_window_title:
+            raise ValueError("expected_bundle_id and expected_window_title are required")
+        if not 1 <= len(steps) <= 4:
+            raise ValueError("Sequence accepts between 1 and 4 steps")
+
+        safe_shortcuts = {
+            "command+a",
+            "command+c",
+            "command+l",
+            "command+v",
+            "enter",
+            "escape",
+            "return",
+            "shift+tab",
+            "tab",
+        }
+
+        def assert_context() -> None:
+            active = self.get_foreground_window()
+            if active is None:
+                raise RuntimeError("Sequence stopped: there is no focused window")
+            if active.bundle_id != expected_bundle_id:
+                raise RuntimeError(
+                    "Sequence stopped: focused application changed "
+                    f"to {active.bundle_id!r}"
+                )
+            if expected_window_title not in (active.name or ""):
+                raise RuntimeError(
+                    "Sequence stopped: focused window title no longer matches "
+                    f"{expected_window_title!r}"
+                )
+
+        for index, step in enumerate(steps, start=1):
+            if not isinstance(step, dict):
+                raise ValueError(f"Step {index} must be an object")
+            assert_context()
+            action = step.get("action")
+            if action == "click":
+                loc = step.get("loc")
+                if not isinstance(loc, list) or len(loc) != 2:
+                    raise ValueError(f"Step {index}: click requires loc [x, y]")
+                if step.get("button", "left") != "left" or step.get("clicks", 1) != 1:
+                    raise ValueError(f"Step {index}: only a single left click is allowed")
+                self.click((loc[0], loc[1]))
+            elif action == "type":
+                loc = step.get("loc")
+                text = step.get("text")
+                if not isinstance(loc, list) or len(loc) != 2 or not isinstance(text, str):
+                    raise ValueError(f"Step {index}: type requires loc [x, y] and text")
+                if len(text) > 500:
+                    raise ValueError(f"Step {index}: text is limited to 500 characters")
+                caret_position = step.get("caret_position", "idle")
+                if caret_position not in {"start", "idle", "end"}:
+                    raise ValueError(f"Step {index}: invalid caret_position")
+                self.type(
+                    (loc[0], loc[1]),
+                    text,
+                    caret_position=caret_position,
+                    clear=bool(step.get("clear", False)),
+                    press_enter=False,
+                )
+            elif action == "shortcut":
+                shortcut = step.get("shortcut")
+                if shortcut not in safe_shortcuts:
+                    raise ValueError(f"Step {index}: shortcut is not allowed in Sequence")
+                self.shortcut(shortcut)
+            elif action == "scroll":
+                direction = step.get("direction", "down")
+                scroll_type = step.get("type", "vertical")
+                wheel_times = step.get("wheel_times", 1)
+                loc = step.get("loc")
+                if scroll_type not in {"vertical", "horizontal"}:
+                    raise ValueError(f"Step {index}: invalid scroll type")
+                if direction not in {"up", "down", "left", "right"}:
+                    raise ValueError(f"Step {index}: invalid scroll direction")
+                if not isinstance(wheel_times, int) or not 1 <= wheel_times <= 3:
+                    raise ValueError(f"Step {index}: wheel_times must be between 1 and 3")
+                if loc is not None and (not isinstance(loc, list) or len(loc) != 2):
+                    raise ValueError(f"Step {index}: scroll loc must be [x, y]")
+                response = self.scroll(
+                    tuple(loc) if loc else None, scroll_type, direction, wheel_times
+                )
+                if response:
+                    raise ValueError(f"Step {index}: {response}")
+            else:
+                raise ValueError(f"Step {index}: action must be click, type, shortcut, or scroll")
+
+        return f"Sequence completed {len(steps)} steps in {expected_bundle_id}."
+
     def scrape(self, url: str) -> str:
         """Fetch URL content as markdown."""
         try:
@@ -758,6 +854,13 @@ class Desktop:
 
     async def async_shortcut(self, shortcut: str) -> None:
         await _to_thread_with_autorelease_pool(self.shortcut, shortcut)
+
+    async def async_sequence(
+        self, expected_bundle_id: str, expected_window_title: str, steps: list[dict]
+    ) -> str:
+        return await _to_thread_with_autorelease_pool(
+            self.sequence, expected_bundle_id, expected_window_title, steps
+        )
 
     async def async_wait(self, duration: int) -> None:
         """Use asyncio.sleep instead of time.sleep to avoid blocking."""
