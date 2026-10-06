@@ -71,62 +71,6 @@ class TestDesktopScreenSize:
 
 
 @pytest.mark.unit
-class TestDesktopSequence:
-    """Tests for the guarded multi-step desktop action."""
-
-    @staticmethod
-    def active_window(bundle_id="com.google.Chrome", name="Google Search"):
-        return Window(
-            name=name,
-            is_browser=True,
-            status=Status.ACTIVE,
-            bounding_box=BoundingBox(left=0, top=0, width=100, height=100, right=100, bottom=100),
-            pid=1,
-            bundle_id=bundle_id,
-        )
-
-    def test_sequence_runs_allowed_steps_in_verified_window(self, mocker):
-        desktop = Desktop()
-        mocker.patch.object(desktop, "get_foreground_window", return_value=self.active_window())
-        click = mocker.patch.object(desktop, "click")
-        type_text = mocker.patch.object(desktop, "type")
-        shortcut = mocker.patch.object(desktop, "shortcut")
-
-        result = desktop.sequence(
-            "com.google.Chrome",
-            "Google",
-            [
-                {"action": "click", "loc": [100, 200]},
-                {"action": "type", "loc": [100, 200], "text": "weather", "clear": True},
-                {"action": "shortcut", "shortcut": "return"},
-            ],
-        )
-
-        assert result == "Sequence completed 3 steps in com.google.Chrome."
-        click.assert_called_once_with((100, 200))
-        type_text.assert_called_once_with(
-            (100, 200), "weather", caret_position="idle", clear=True, press_enter=False
-        )
-        shortcut.assert_called_once_with("return")
-
-    def test_sequence_stops_before_actions_when_context_changes(self, mocker):
-        desktop = Desktop()
-        mocker.patch.object(
-            desktop,
-            "get_foreground_window",
-            return_value=self.active_window(bundle_id="com.apple.TextEdit"),
-        )
-        click = mocker.patch.object(desktop, "click")
-
-        with pytest.raises(RuntimeError, match="focused application changed"):
-            desktop.sequence(
-                "com.google.Chrome", "Google", [{"action": "click", "loc": [100, 200]}]
-            )
-
-        click.assert_not_called()
-
-
-@pytest.mark.unit
 class TestDesktopAppManagement:
     """Tests for Desktop.app method."""
 

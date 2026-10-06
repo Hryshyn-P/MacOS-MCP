@@ -403,35 +403,6 @@ async def shortcut_tool(shortcut: str, ctx: Context = None):
 
 
 @mcp.tool(
-    name="Sequence",
-    description=(
-        "Runs 1-4 safe, predictable UI steps in one MCP call to reduce round trips. "
-        "Use only after a fresh Snapshot, only within the same focused window, and only "
-        "for routine interaction such as click + type + Enter. Requires the exact active "
-        "app bundle ID and a stable window-title substring. Allowed actions are single left "
-        "click, type, a small allowlist of navigation shortcuts, and short scrolls. Never use "
-        "for logins, purchases, sending messages, deleting content, drag-and-drop, unknown "
-        "or changing pages, or when any intermediate result must be inspected. The sequence "
-        "stops before a step if the active app or window title has changed."
-    ),
-    annotations=ToolAnnotations(
-        title="Sequence",
-        readOnlyHint=False,
-        destructiveHint=True,
-        idempotentHint=False,
-        openWorldHint=False,
-    ),
-)
-async def sequence_tool(
-    expected_bundle_id: str,
-    expected_window_title: str,
-    steps: list[dict],
-    ctx: Context = None,
-) -> str:
-    return await desktop.async_sequence(expected_bundle_id, expected_window_title, steps)
-
-
-@mcp.tool(
     name="Wait",
     description="Pauses execution for specified duration in seconds. Use when waiting for: applications to launch, UI animations to complete, content to load. Helps ensure UI is ready before next interaction.",
     annotations=ToolAnnotations(
